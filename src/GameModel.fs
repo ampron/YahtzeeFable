@@ -136,7 +136,7 @@ module GameState =
     (Table.numColumns st.upperTbl)
 
   let playerIndices (st: GameState): seq<int> =
-    seq{ for playerIdx in 1..(Table.numColumns st.upperTbl) do playerIdx }
+    seq{ for playerIdx in 0..(Table.numColumns st.upperTbl)-1 do playerIdx }
 
   let isYahtzeeBonusAvailable (st: GameState): bool =
     let isYahtzeeFilled() =

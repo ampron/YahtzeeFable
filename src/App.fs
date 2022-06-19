@@ -91,8 +91,8 @@ let inGameView (st: GameState) dispatch =
         tbody [] [
           tr [] [
             th [] []
-            for playerIdx in GameState.playerIndices st do
-              th [] [str $"Player %d{playerIdx}"]
+            for playerId in 1 .. Table.numColumns st.upperTbl do
+              th [] [str $"Player %d{playerId}"]
           ]
           spacerRow()
 
