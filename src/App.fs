@@ -183,8 +183,6 @@ let inGameView (st: GameState) dispatch =
         | 2 -> button [OnClick(fun _ -> RollDice |> dispatch)] [str "Final roll..."]
         | 3 -> ()
         | _ -> failwith "excessive rolling"
-        if 0 < st.dice.Length then
-          button [OnClick(fun _ -> HoldAll |> dispatch)] [str "Hold all"]
       ]
       span [Class "dice-cup"] [
         for (i, d) in Seq.indexed st.dice do
