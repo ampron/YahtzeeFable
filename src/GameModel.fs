@@ -61,8 +61,7 @@ type Die =
 let newDie() = { value= 6; held= false }
 
 let newRolledDice (rnd: Random): array<int> =
-    [| 6; 6; 6; 6; 6 |]
-    // Array.init 5 (fun _ -> rnd.Next(1, 7))
+    Array.init 5 (fun _ -> rnd.Next(1, 7))
 
 
 type ScoringSlot =
