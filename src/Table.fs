@@ -15,6 +15,10 @@ type Table<'t> =
 module Table =
   let empty() = { rows= Array.empty }
 
+  let numRows (tbl: Table<'t>): int = tbl.rows.Length
+
+  let numColumns (tbl: Table<'t>): int = tbl.rows[0].Length
+
   let copy (tbl: Table<'t>): Table<'t> =
     { rows= [| for row in tbl.rows do Array.copy row |] }
 

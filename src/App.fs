@@ -23,7 +23,6 @@ type Msg =
 | HoldAll
 | RollDice
 | SwapDie of int
-| ChooseScoringRow of array<ScoringSlot> * int * int
 | ChooseScoringOption of (GameState -> GameState)
 
 let init() : Model = Loby
@@ -55,27 +54,10 @@ let update (msg: Msg) (model: Model) =
               d
         |]
       InGame({ st with dice= newDice })
-    | ChooseScoringRow (col, i, y) ->
+    | ChooseScoringOption(updateScoreCard) ->
       if GameState.isYahtzeeBonusAvailable st then
         st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
-      col.[i] <- { col[i] with fill= Some(y) }
-      InGame(
-        { st
-          with
-            activePlayer= (st.activePlayer + 1) % st.upperColumns.Length
-            rolls= 0
-            dice= Array.empty
-        }
-      )
-    | ChooseScoringOption(updateScoreCard) ->
-      InGame(
-        { updateScoreCard st
-          with
-            activePlayer= (st.activePlayer + 1) % st.upperColumns.Length
-            rolls= 0
-            dice= Array.empty
-        }
-      )
+      InGame(st |> updateScoreCard |> GameState.passTurn)
 
 
 // VIEW (rendered with React)
@@ -92,12 +74,10 @@ let inGameView (st: GameState) dispatch =
   let grandTotalCell n = td [Class "grand-total"] [str (n.ToString())]
   let rowLabelCell s = td [Class "row-label"] [str s]
   let spacerRow() =
-    tr [Class "spacer-row"] [for _ in 0..st.upperColumns.Length do td [] []]
-  let possibleScoreButton col rowIdx y =
-    button [
-      Class "possible-score"
-      OnClick(fun _ -> ChooseScoringRow(col, rowIdx, y) |> dispatch)
-    ] [str $"{y}"]
+    tr [Class "spacer-row"] [
+      td [] []
+      for _ in 0..(GameState.numOfPlayers st) do td [] []
+    ]
 
   let totals = calcTotals st
   div [] [
@@ -105,22 +85,22 @@ let inGameView (st: GameState) dispatch =
       table [] [
         colgroup [] [
           col []
-          for (i, _) in Seq.indexed st.upperColumns do
-            col [if i = st.activePlayer then Class "active-player"]
+          for playerIdx in GameState.playerIndices st do
+            col [if playerIdx = st.activePlayer then Class "active-player"]
         ]
         tbody [] [
           tr [] [
             th [] []
-            for playerNum in 1..st.upperColumns.Length do
-              th [] [str $"Player %d{playerNum}"]
+            for playerIdx in GameState.playerIndices st do
+              th [] [str $"Player %d{playerIdx}"]
           ]
           spacerRow()
-          // alternate upper table rendering
+
           let upperScoring = GameState.upperTableScoring st
           for (rowLabel, row) in Seq.zip st.upperRowLabels (upperScoring |> Table.rows) do
             tr [] [
               td [] [str rowLabel]
-              for (colIdx, cell) in row |> Seq.indexed do td [] [
+              for cell in row do td [] [
                 match cell with
                 | PotentialScore(points, updateState) ->
                     button [
@@ -149,24 +129,22 @@ let inGameView (st: GameState) dispatch =
           ]
           spacerRow()
 
-          // lower rows
-          for (rowIdx, firstColCell) in Seq.indexed st.lowerColumns.Head do
+          let lowerScoring = GameState.lowerTableScoring st
+          for (rowLabel, row) in Seq.zip st.lowerRowLabels (lowerScoring |> Table.rows) do
             tr [] [
-              td [] [str firstColCell.name]
-              for (colIdx, col) in Seq.indexed st.lowerColumns do
-                let cell = col[rowIdx]
-                td [] [
-                  match cell.fill with
-                  | None ->
-                    if st.rolls = 3 && colIdx = st.activePlayer then
-                      let y =
-                        st.dice
-                        |> Array.map (fun d -> d.value)
-                        |> cell.score
-                      possibleScoreButton col rowIdx y
-                  | Some(n) ->
+              td [] [str rowLabel]
+              for cell in row do td [] [
+                match cell with
+                | PotentialScore(points, updateState) ->
+                    button [
+                      Class "possible-score"
+                      OnClick(fun _ -> ChooseScoringOption(updateState) |> dispatch)
+                    ] [str $"{points}"]
+                | Unavailable(None) ->
+                    str ""
+                | Unavailable(Some(n)) ->
                     str $"{n}"
-                ]
+              ]
             ]
 
           spacerRow()

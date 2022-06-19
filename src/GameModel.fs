@@ -82,18 +82,18 @@ type ScoreCardCell =
 type GameState =
   {
     rnd: Random
-    upperColumns: list<array<ScoringSlot>>
-    upperBonuses: array<int>
-    lowerColumns: list<array<ScoringSlot>>
-    numYahtzeeBonuses: array<int>
     activePlayer: int
     rolls: int
     dice: Die array
     areDiceShowingYahtzee: bool
 
-    // experimental
-    upperTbl: Table<ScoreCardCell>
     upperRowLabels: list<string>
+    upperTbl: Table<ScoreCardCell>
+    upperBonuses: array<int>
+
+    lowerRowLabels: list<string>
+    lowerTbl: Table<ScoreCardCell>
+    numYahtzeeBonuses: array<int>
   }
 
   member this.upperRows(): seq<seq<ScoringSlot>> =
@@ -133,12 +133,19 @@ type ScoreCellFill =
 
 module GameState =
 
+  let numOfPlayers (st: GameState): int =
+    (Table.numColumns st.upperTbl)
+
+  let playerIndices (st: GameState): seq<int> =
+    seq{ for playerIdx in 1..(Table.numColumns st.upperTbl) do playerIdx }
+
   let isYahtzeeBonusAvailable (st: GameState): bool =
     let isYahtzeeFilled() =
-      st.lowerColumns.[st.activePlayer]
-      |> Seq.find (fun slot -> slot.name = "Yahtzee!")
-      |> (fun slot -> Option.isNone slot.fill)
-      |> not
+      let yahtzeeRowIdx =
+        Seq.indexed st.lowerRowLabels
+        |> Seq.find (fun (_, lbl) -> lbl = "Yahtzee!")
+        |> fst
+      (st.lowerTbl[yahtzeeRowIdx, st.activePlayer]).fill |> Option.isSome
     let isYahtzee() = 0 < (st.dice |> Array.map (fun d -> d.value) |> scoreNOfAKind 5)
     isYahtzeeFilled() && isYahtzee()
 
@@ -162,36 +169,32 @@ module GameState =
       |]
     )
 
-  let jokerRule (st: GameState) (upperRows, lowerRows): (array<ScoreCellFill> * array<ScoreCellFill>) =
-    // reference: https://en.wikipedia.org/wiki/Yahtzee#Yahtzee_bonuses_and_Joker_rules
-    let isUpperNumFilled() =
-      let dieFace = st.dice[0].value
-      Option.isSome st.upperColumns[st.activePlayer].[dieFace].fill
-    if isYahtzeeBonusAvailable st && isUpperNumFilled() then
-      let updatePotentialScoreAt rowIdx n =
-        Array.updateAt rowIdx (PotentialScore(n, fun st ->
-          { st with
-              lowerColumns=
-                st.lowerColumns
-                |> List.updateAt st.activePlayer (
-                  st.lowerColumns[st.activePlayer]
-                  |> Array.updateAt 4 { st.lowerColumns[st.activePlayer].[rowIdx] with fill= Some(n) }
-                )
-          }
-        ))
-      ( upperRows,
-        lowerRows
-        |> updatePotentialScoreAt 2 25
-        |> updatePotentialScoreAt 3 30
-        |> updatePotentialScoreAt 4 40
-      )
+  let passTurn (st: GameState): GameState =
+    { st
+      with
+        activePlayer= (st.activePlayer + 1) % numOfPlayers st
+        rolls= 0
+        dice= Array.empty
+    }
+
+  // reference: https://en.wikipedia.org/wiki/Yahtzee#Free_choice_Joker_rule
+  let jokerScoringRule (st: GameState) rowIdx colIdx origScoringFn dice =
+    let isUpperNumFilled =
+        let dieFace = st.dice[0].value
+        Option.isSome st.upperTbl[dieFace-1, colIdx].fill
+    if isYahtzeeBonusAvailable st && isUpperNumFilled then
+      match rowIdx with
+      | 2 -> 25
+      | 3 -> 30
+      | 4 -> 40
+      | _ -> origScoringFn dice
     else
-      (upperRows, lowerRows)
+      origScoringFn dice
 
   let upperTableScoring (st: GameState): Table<ScoreCellFill> =
     st.upperTbl
     |> Table.mapi (fun (rowIdx, colIdx) cell ->
-      if colIdx = st.activePlayer then
+      if not (Array.isEmpty st.dice) && colIdx = st.activePlayer then
         match cell.fill with
         | None ->
           let y =
@@ -209,20 +212,30 @@ module GameState =
         Unavailable(cell.fill)
     )
 
-  let lowerTableScoring
-    (st: GameState)
-    (upperTbl: Table<ScoringSlot>)
-    (lowerTbl: Table<ScoringSlot>)
-    : Table<ScoreCellFill>
-    =
-    failwith "unimplemented"
+  let lowerTableScoring (st: GameState): Table<ScoreCellFill> =
+    st.lowerTbl
+    |> Table.mapi (fun (rowIdx, colIdx) cell ->
+      if not (Array.isEmpty st.dice) && colIdx = st.activePlayer && Option.isNone cell.fill then
+        let y =
+          st.dice
+          |> Array.map (fun d -> d.value)
+          |> jokerScoringRule st rowIdx colIdx cell.score
+        PotentialScore (y, (fun st ->
+          { st
+            with
+              lowerTbl = st.lowerTbl |> Table.updateAt (rowIdx, colIdx) (fun _ -> { cell with fill= Some(y) })
+          }
+        ))
+      else
+        Unavailable(cell.fill)
+    )
 
 let newGameState (numPlayers: int) =
   {
     rnd= Random()
-    upperColumns= List.init numPlayers (fun _ -> newPlayerUpperColumn())
+    // upperColumns= List.init numPlayers (fun _ -> newPlayerUpperColumn())
     upperBonuses= Array.init numPlayers (fun _ -> 0)
-    lowerColumns= List.init numPlayers (fun _ -> newPlayerLowerColumn())
+    // lowerColumns= List.init numPlayers (fun _ -> newPlayerLowerColumn())
     numYahtzeeBonuses= Array.init numPlayers (fun _ -> 0)
     activePlayer= 0
     rolls= 0
@@ -234,6 +247,19 @@ let newGameState (numPlayers: int) =
         [| for _ in 1..numPlayers do { score= (scoreFaces n); fill= None } |]
     |] }
     upperRowLabels= ["ones"; "twos"; "threes"; "fours"; "fives"; "sixes"]
+    lowerTbl = { rows= [|
+      [| for _ in 1..numPlayers do { score= (scoreNOfAKind 3);  fill= None } |]
+      [| for _ in 1..numPlayers do { score= (scoreNOfAKind 4);  fill= None } |]
+      [| for _ in 1..numPlayers do { score= scoreFullHouse;     fill= None } |]
+      [| for _ in 1..numPlayers do { score= (scoreNStraight 4); fill= None } |]
+      [| for _ in 1..numPlayers do { score= (scoreNStraight 5); fill= None } |]
+      [| for _ in 1..numPlayers do { score= (scoreNOfAKind 5);  fill= None } |]
+      [| for _ in 1..numPlayers do { score= scoreChance;        fill= None } |]
+    |] }
+    lowerRowLabels= [
+      "3 of a kind"; "4 of a kind"; "full house"; "small straight"; "large straight";
+      "Yahtzee!"; "chance"
+    ]
   }
 
 let rerollDice (st: GameState) =
@@ -266,8 +292,9 @@ type ScoreTotals =
   }
 
 let calcTotals st =
+  let getColumns = Table.transpose >> Table.rows
   let columns =
-    Seq.zip st.upperColumns st.lowerColumns
+    Seq.zip (getColumns st.upperTbl) (getColumns st.lowerTbl)
     |> Seq.indexed
   [|
     for (playerIdx, (upperCol, lowerCol)) in columns do
