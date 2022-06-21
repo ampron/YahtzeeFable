@@ -76,10 +76,11 @@ let inGameView (st: GameState) dispatch =
   let spacerRow() =
     tr [Class "spacer-row"] [
       td [] []
-      for _ in 0..(GameState.numOfPlayers st) do td [] []
+      for _ in GameState.playerIndices st do
+        td [] []
     ]
-
   let totals = calcTotals st
+
   div [] [
     div [] [
       table [] [
