@@ -13,6 +13,7 @@ open GameModel
 type Model =
   | Loby
   | InGame of GameState
+  | GameOver of GameState * PlayerIdx * Points
 
 type Index = int
 
@@ -35,16 +36,19 @@ let update (msg: Msg) (model: Model) =
     match msg with
     | StartGame(n) -> InGame(newGameState n)
     | _ -> failwith "unsupported Loby message"
+
   | InGame(st) ->
     match msg with
     | HoldAll ->
       for (i, d) in Seq.indexed st.dice do
         st.dice[i] <- { d with held= true }
       InGame({ st with rolls= 3 })
+
     | RollDice ->
       match st.rolls with
       | 0 | 1 | 2 -> InGame(rerollDice st)
       | _ -> failwith "invaild state, # of rolls"
+
     | SwapDie(swapIdx) ->
       let newDice =
         [| for (i, d) in Seq.indexed st.dice do
@@ -54,10 +58,18 @@ let update (msg: Msg) (model: Model) =
               d
         |]
       InGame({ st with dice= newDice })
+
     | ChooseScoringOption(updateScoreCard) ->
       if GameState.isYahtzeeBonusAvailable st then
         st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
-      InGame(st |> updateScoreCard |> GameState.passTurn)
+      let newSt = st |> updateScoreCard |> GameState.passTurn
+      match findWinner newSt with
+      | None -> InGame(newSt)
+      | Some((playerIdx, score)) -> GameOver(newSt, playerIdx, score)
+
+    | _ -> failwith "unsupported InGame message"
+
+  | GameOver(x, i, y) -> GameOver(x, i, y)
 
 
 // VIEW (rendered with React)
@@ -198,10 +210,14 @@ let inGameView (st: GameState) dispatch =
     ]
   ]
 
-let view (model: Model) dispatch =
+let endGameView (st: GameState, winnerIdx: PlayerIdx, winningScore: Points) dispatch =
+  p [] [str $"Player {winnerIdx+1} wins with {winningScore} points!"]
+
+let view (model: Model) =
   match model with
-    | Loby -> lobyView dispatch
-    | InGame(st) -> inGameView st dispatch
+    | Loby -> lobyView
+    | InGame(st) -> inGameView st
+    | GameOver(st, i, y) -> endGameView (st, i, y)
 
 
 // App

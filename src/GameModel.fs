@@ -3,6 +3,14 @@ module GameModel
 open System
 open Yahtzee.Data
 
+module Seq =
+  let flatten (seqs: seq<seq<'a>>): seq<'a> =
+    seq{
+      for xs in seqs do
+        for x in xs do
+          yield x
+    }
+
 let scoreFaces (faceNum: int) (dice: int array): int =
   dice
   |> Seq.filter (fun n -> n = faceNum)
@@ -326,3 +334,22 @@ let totalSection (cols: array<ScoringSlot>): int =
 
 let upperSectionBonus col =
   if 63 <= totalSection col then 35 else 0
+
+
+type PlayerIdx = int
+
+let findWinner (st: GameState): Option<PlayerIdx * Points> =
+  let isTableFull =
+    Table.rows
+    >> Seq.flatten
+    >> Seq.map (fun cell -> Option.isSome cell.fill)
+    >> Seq.reduce (fun x y -> x && y)
+  if isTableFull st.upperTbl && isTableFull st.lowerTbl then
+    Some(
+      calcTotals st
+      |> Seq.map (fun t -> t.grandTotal)
+      |> Seq.indexed
+      |> Seq.maxBy snd
+    )
+  else
+    None
