@@ -15,10 +15,16 @@ type Mode =
   | NormalMode
   | DeveloperMode
 
-type Model =
+type YahtzeeStage =
   | Loby
-  | InGame of GameState * Mode
+  | InGame of GameState
   | GameOver of GameState * PlayerIdx * Points
+
+type Model =
+  {
+    ystage: YahtzeeStage
+    developerModeEnabled: bool
+  }
 
 type Index = int
 
@@ -32,7 +38,8 @@ type Msg =
 | ChooseScoringOption of (GameState -> GameState)
 | ToggleDeveoperMode
 
-let init() : Model = Loby
+let init() : Model =
+  { ystage= Loby; developerModeEnabled= false }
 
 // reference: https://elmish.github.io/elmish/docs/subscription.html
 let keyEvents _initialModel =
@@ -48,23 +55,23 @@ let keyEvents _initialModel =
 
 // UPDATE
 //------------------------------------------------------------------------------
-let update (msg: Msg) (model: Model) =
-  match model with
+let update (msg: Msg) (model: Model) : Model =
+  match model.ystage with
   | Loby ->
     match msg with
-    | StartGame(n) -> InGame(newGameState n, NormalMode)
+    | StartGame(n) -> { model with ystage= InGame(newGameState n) }
     | _ -> failwith "unsupported Loby message"
 
-  | InGame(st, mode) ->
+  | InGame(st) ->
     match msg with
     | HoldAll ->
       for (i, d) in Seq.indexed st.dice do
         st.dice[i] <- { d with held= true }
-      InGame({ st with rolls= 3 }, mode)
+      { model with ystage= InGame({ st with rolls= 3 }) }
 
     | RollDice ->
       match st.rolls with
-      | 0 | 1 | 2 -> InGame(rerollDice st, mode)
+      | 0 | 1 | 2 -> { model with ystage= InGame(rerollDice st) }
       | _ -> failwith "invaild state, # of rolls"
 
     | SwapDie(swapIdx) ->
@@ -75,24 +82,24 @@ let update (msg: Msg) (model: Model) =
             else
               d
         |]
-      InGame({ st with dice= newDice }, mode)
+      { model with ystage= InGame({ st with dice= newDice }) }
 
     | ChooseScoringOption(updateScoreCard) ->
       if GameState.isYahtzeeBonusAvailable st then
         st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
       let newSt = st |> updateScoreCard |> GameState.passTurn
       match findWinner newSt with
-      | None -> InGame(newSt, mode)
-      | Some((playerIdx, score)) -> GameOver(newSt, playerIdx, score)
+      | None -> { model with ystage= InGame(newSt) }
+      | Some((playerIdx, score)) ->
+        { model with ystage= GameOver(newSt, playerIdx, score) }
 
     | ToggleDeveoperMode ->
-      match mode with
-      | NormalMode -> InGame(st, DeveloperMode)
-      | DeveloperMode -> InGame(st, NormalMode)
+      { model with developerModeEnabled= not model.developerModeEnabled }
 
     | _ -> failwith "unsupported InGame message"
 
-  | GameOver(x, i, y) -> GameOver(x, i, y)
+  | GameOver(x, i, y) ->
+    { model with ystage= GameOver(x, i, y) }
 
 
 // VIEW (rendered with React)
@@ -104,7 +111,7 @@ let lobyView dispatch =
       button [ OnClick (fun _ -> StartGame(n) |> dispatch) ] [ str $"{n}" ]
   ]
 
-let inGameView (st: GameState) mode dispatch =
+let inGameView (model: Model) (st: GameState) dispatch =
   let calculatedCell n = td [Class "calculated-cell"] [ str (n.ToString())]
   let grandTotalCell n = td [Class "grand-total"] [str (n.ToString())]
   let rowLabelCell s = td [Class "row-label"] [str s]
@@ -117,9 +124,7 @@ let inGameView (st: GameState) mode dispatch =
   let totals = calcTotals st
 
   div [
-    match mode with
-    | NormalMode -> Class "normal-mode"
-    | DeveloperMode -> Class "developer-mode"
+    Class(if model.developerModeEnabled then "developer-mode" else "normal-mode")
   ] [
     div [] [
       table [] [
@@ -241,9 +246,9 @@ let endGameView (st: GameState, winnerIdx: PlayerIdx, winningScore: Points) disp
   p [] [str $"Player {winnerIdx+1} wins with {winningScore} points!"]
 
 let view (model: Model) =
-  match model with
+  match model.ystage with
     | Loby -> lobyView
-    | InGame(st, mode) -> inGameView st mode
+    | InGame(st) -> inGameView model st
     | GameOver(st, i, y) -> endGameView (st, i, y)
 
 // App
