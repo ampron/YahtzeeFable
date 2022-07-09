@@ -56,56 +56,60 @@ let keyEvents _initialModel =
 // UPDATE
 //------------------------------------------------------------------------------
 let update (msg: Msg) (model: Model) : Model =
-  match model.ystage with
-  | Loby ->
-    match msg with
-    | StartGame(n) -> { model with ystage= InGame(newGameState n) }
-    | _ -> failwith "unsupported Loby message"
+  match msg with
+  | ToggleDeveoperMode ->
+    { model with developerModeEnabled= not model.developerModeEnabled }
 
-  | InGame(st) ->
-    match msg with
-    | HoldAll ->
-      for (i, d) in Seq.indexed st.dice do
-        st.dice[i] <- { d with held= true }
-      { model with ystage= InGame({ st with rolls= 3 }) }
+  | _ ->
+    match model.ystage with
+    | Loby ->
+      match msg with
+      | StartGame(n) -> { model with ystage= InGame(newGameState n) }
+      | _ -> failwith "unsupported Loby message"
 
-    | RollDice ->
-      match st.rolls with
-      | 0 | 1 | 2 -> { model with ystage= InGame(rerollDice st) }
-      | _ -> failwith "invaild state, # of rolls"
+    | InGame(st) ->
+      match msg with
+      | HoldAll ->
+        for (i, d) in Seq.indexed st.dice do
+          st.dice[i] <- { d with held= true }
+        { model with ystage= InGame({ st with rolls= 3 }) }
 
-    | SwapDie(swapIdx) ->
-      let newDice =
-        [| for (i, d) in Seq.indexed st.dice do
-            if i = swapIdx then
-              { d with held= not d.held }
-            else
-              d
-        |]
-      { model with ystage= InGame({ st with dice= newDice }) }
+      | RollDice ->
+        match st.rolls with
+        | 0 | 1 | 2 -> { model with ystage= InGame(rerollDice st) }
+        | _ -> failwith "invaild state, # of rolls"
 
-    | ChooseScoringOption(updateScoreCard) ->
-      if GameState.isYahtzeeBonusAvailable st then
-        st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
-      let newSt = st |> updateScoreCard |> GameState.passTurn
-      match findWinner newSt with
-      | None -> { model with ystage= InGame(newSt) }
-      | Some((playerIdx, score)) ->
-        { model with ystage= GameOver(newSt, playerIdx, score) }
+      | SwapDie(swapIdx) ->
+        let newDice =
+          [| for (i, d) in Seq.indexed st.dice do
+              if i = swapIdx then
+                { d with held= not d.held }
+              else
+                d
+          |]
+        { model with ystage= InGame({ st with dice= newDice }) }
 
-    | ToggleDeveoperMode ->
-      { model with developerModeEnabled= not model.developerModeEnabled }
+      | ChooseScoringOption(updateScoreCard) ->
+        if GameState.isYahtzeeBonusAvailable st then
+          st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
+        let newSt = st |> updateScoreCard |> GameState.passTurn
+        match findWinner newSt with
+        | None -> { model with ystage= InGame(newSt) }
+        | Some((playerIdx, score)) ->
+          { model with ystage= GameOver(newSt, playerIdx, score) }
 
-    | _ -> failwith "unsupported InGame message"
+      | _ -> failwith "unsupported InGame message"
 
-  | GameOver(x, i, y) ->
-    { model with ystage= GameOver(x, i, y) }
+    | GameOver(x, i, y) ->
+      { model with ystage= GameOver(x, i, y) }
 
 
 // VIEW (rendered with React)
 //------------------------------------------------------------------------------
-let lobyView dispatch =
-  div [] [
+let lobyView model dispatch =
+  div [
+    Class(if model.developerModeEnabled then "developer-mode" else "normal-mode")
+  ] [
     p [] [str "How many players?"]
     for n in 2..6 do
       button [ OnClick (fun _ -> StartGame(n) |> dispatch) ] [ str $"{n}" ]
@@ -247,7 +251,7 @@ let endGameView (st: GameState, winnerIdx: PlayerIdx, winningScore: Points) disp
 
 let view (model: Model) =
   match model.ystage with
-    | Loby -> lobyView
+    | Loby -> lobyView model
     | InGame(st) -> inGameView model st
     | GameOver(st, i, y) -> endGameView (st, i, y)
 
