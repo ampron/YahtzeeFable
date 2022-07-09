@@ -2,6 +2,7 @@ module App
 
 open Elmish
 open Elmish.React
+open Fable.Core
 open Fable.React
 open Fable.React.Props
 
@@ -10,9 +11,13 @@ open GameModel
 
 // MODEL
 //------------------------------------------------------------------------------
+type Mode =
+  | NormalMode
+  | DeveloperMode
+
 type Model =
   | Loby
-  | InGame of GameState
+  | InGame of GameState * Mode
   | GameOver of GameState * PlayerIdx * Points
 
 type Index = int
@@ -25,8 +30,21 @@ type Msg =
 | RollDice
 | SwapDie of int
 | ChooseScoringOption of (GameState -> GameState)
+| ToggleDeveoperMode
 
 let init() : Model = Loby
+
+// reference: https://elmish.github.io/elmish/docs/subscription.html
+let keyEvents _initialModel =
+  let subscription dispatch =
+    Browser.Dom.document.addEventListener("keyup", (fun e ->
+      // printfn $"captured event {e.``type``}, {e.Value}"
+      let ke = e :?> Browser.Types.KeyboardEvent
+      printfn $"key code = %.0f{ke.keyCode}"
+      if ke.keyCode = 192. then dispatch ToggleDeveoperMode
+    ))
+
+  Cmd.ofSub subscription
 
 // UPDATE
 //------------------------------------------------------------------------------
@@ -34,19 +52,19 @@ let update (msg: Msg) (model: Model) =
   match model with
   | Loby ->
     match msg with
-    | StartGame(n) -> InGame(newGameState n)
+    | StartGame(n) -> InGame(newGameState n, NormalMode)
     | _ -> failwith "unsupported Loby message"
 
-  | InGame(st) ->
+  | InGame(st, mode) ->
     match msg with
     | HoldAll ->
       for (i, d) in Seq.indexed st.dice do
         st.dice[i] <- { d with held= true }
-      InGame({ st with rolls= 3 })
+      InGame({ st with rolls= 3 }, mode)
 
     | RollDice ->
       match st.rolls with
-      | 0 | 1 | 2 -> InGame(rerollDice st)
+      | 0 | 1 | 2 -> InGame(rerollDice st, mode)
       | _ -> failwith "invaild state, # of rolls"
 
     | SwapDie(swapIdx) ->
@@ -57,15 +75,20 @@ let update (msg: Msg) (model: Model) =
             else
               d
         |]
-      InGame({ st with dice= newDice })
+      InGame({ st with dice= newDice }, mode)
 
     | ChooseScoringOption(updateScoreCard) ->
       if GameState.isYahtzeeBonusAvailable st then
         st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
       let newSt = st |> updateScoreCard |> GameState.passTurn
       match findWinner newSt with
-      | None -> InGame(newSt)
+      | None -> InGame(newSt, mode)
       | Some((playerIdx, score)) -> GameOver(newSt, playerIdx, score)
+
+    | ToggleDeveoperMode ->
+      match mode with
+      | NormalMode -> InGame(st, DeveloperMode)
+      | DeveloperMode -> InGame(st, NormalMode)
 
     | _ -> failwith "unsupported InGame message"
 
@@ -81,7 +104,7 @@ let lobyView dispatch =
       button [ OnClick (fun _ -> StartGame(n) |> dispatch) ] [ str $"{n}" ]
   ]
 
-let inGameView (st: GameState) dispatch =
+let inGameView (st: GameState) mode dispatch =
   let calculatedCell n = td [Class "calculated-cell"] [ str (n.ToString())]
   let grandTotalCell n = td [Class "grand-total"] [str (n.ToString())]
   let rowLabelCell s = td [Class "row-label"] [str s]
@@ -93,7 +116,11 @@ let inGameView (st: GameState) dispatch =
     ]
   let totals = calcTotals st
 
-  div [] [
+  div [
+    match mode with
+    | NormalMode -> Class "normal-mode"
+    | DeveloperMode -> Class "developer-mode"
+  ] [
     div [] [
       table [] [
         colgroup [] [
@@ -216,13 +243,13 @@ let endGameView (st: GameState, winnerIdx: PlayerIdx, winningScore: Points) disp
 let view (model: Model) =
   match model with
     | Loby -> lobyView
-    | InGame(st) -> inGameView st
+    | InGame(st, mode) -> inGameView st mode
     | GameOver(st, i, y) -> endGameView (st, i, y)
-
 
 // App
 //------------------------------------------------------------------------------
 Program.mkSimple init update view
+|> Program.withSubscription keyEvents
 |> Program.withReactSynchronous "elmish-app"
 |> Program.withConsoleTrace
 |> Program.run
