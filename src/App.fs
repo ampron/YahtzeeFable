@@ -36,7 +36,7 @@ type Msg =
 | RollDice
 | SwapDie of int
 | ChooseScoringOption of (GameState -> GameState)
-| ToggleDeveoperMode
+| SingleKeyPress of Browser.Types.KeyboardEvent
 
 let init() : Model =
   { ystage= Loby; developerModeEnabled= false }
@@ -48,17 +48,48 @@ let keyEvents _initialModel =
       // printfn $"captured event {e.``type``}, {e.Value}"
       let ke = e :?> Browser.Types.KeyboardEvent
       printfn $"key code = %.0f{ke.keyCode}"
-      if ke.keyCode = 192. then dispatch ToggleDeveoperMode
+      SingleKeyPress(ke) |> dispatch
+      // if ke.keyCode = 192. then dispatch ToggleDeveoperMode
     ))
 
   Cmd.ofSub subscription
 
 // UPDATE
 //------------------------------------------------------------------------------
+let cycleDie keyCode model =
+  let idx = keyCode - 49
+  { model
+    with
+      ystage=
+        match model.ystage with
+        | InGame(st) ->
+          InGame(
+            { st
+              with
+                dice=
+                  st.dice
+                  |> Array.updateAt idx (
+                    { st.dice[idx] with value= (st.dice[idx].value % 6) + 1}
+                  )
+            }
+          )
+        | _ -> model.ystage
+  }
+
 let update (msg: Msg) (model: Model) : Model =
   match msg with
-  | ToggleDeveoperMode ->
-    { model with developerModeEnabled= not model.developerModeEnabled }
+  | SingleKeyPress(ke) ->
+    match (ke.keyCode, model.developerModeEnabled) with
+    | (192., _) ->
+      { model with developerModeEnabled= not model.developerModeEnabled }
+
+    | (49., true) -> cycleDie 49 model
+    | (50., true) -> cycleDie 50 model
+    | (51., true) -> cycleDie 51 model
+    | (52., true) -> cycleDie 52 model
+    | (53., true) -> cycleDie 53 model
+
+    | _ -> model
 
   | _ ->
     match model.ystage with
