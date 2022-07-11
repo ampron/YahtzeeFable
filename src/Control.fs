@@ -15,8 +15,11 @@ let cycleDie keyCode model =
         | InGame(st) -> InGame(
             { st with
                 dice=
-                st.dice |> Array.updateAt idx (
-                  { st.dice[idx] with value= (st.dice[idx].value % 6) + 1}
+                  if Array.isEmpty st.dice then
+                    st.dice
+                  else
+                    st.dice |> Array.updateAt idx (
+                      { st.dice[idx] with value= (st.dice[idx].value % 6) + 1}
                 )
             }
           )

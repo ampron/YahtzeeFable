@@ -21,7 +21,6 @@ let keyEvents _initialModel =
   let subscription dispatch =
     Browser.Dom.document.addEventListener("keyup", (fun e ->
       let ke = e :?> Browser.Types.KeyboardEvent
-      printfn $"key code = %.0f{ke.keyCode}"
       SingleKeyPress(ke) |> dispatch
     ))
 
