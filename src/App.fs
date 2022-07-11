@@ -2,94 +2,39 @@ module App
 
 open Elmish
 open Elmish.React
-open Fable.Core
 open Fable.React
 open Fable.React.Props
 
 open Yahtzee.Data
+open AppModel
 open GameModel
 
 // MODEL
 //------------------------------------------------------------------------------
-type Mode =
-  | NormalMode
-  | DeveloperMode
-
-type YahtzeeStage =
-  | Loby
-  | InGame of GameState
-  | GameOver of GameState * PlayerIdx * Points
-
-type Model =
-  {
-    ystage: YahtzeeStage
-    developerModeEnabled: bool
-  }
-
-type Index = int
-
-type Score = int
-
-type Msg =
-| StartGame of int
-| HoldAll
-| RollDice
-| SwapDie of int
-| ChooseScoringOption of (GameState -> GameState)
-| SingleKeyPress of Browser.Types.KeyboardEvent
-
 let init() : Model =
-  { ystage= Loby; developerModeEnabled= false }
+  {
+    ystage= Loby
+    keyMap= Control.initialKeyMap.Value
+    developerModeEnabled= false
+  }
 
 // reference: https://elmish.github.io/elmish/docs/subscription.html
 let keyEvents _initialModel =
   let subscription dispatch =
     Browser.Dom.document.addEventListener("keyup", (fun e ->
-      // printfn $"captured event {e.``type``}, {e.Value}"
       let ke = e :?> Browser.Types.KeyboardEvent
       printfn $"key code = %.0f{ke.keyCode}"
       SingleKeyPress(ke) |> dispatch
-      // if ke.keyCode = 192. then dispatch ToggleDeveoperMode
     ))
 
   Cmd.ofSub subscription
 
 // UPDATE
 //------------------------------------------------------------------------------
-let cycleDie keyCode model =
-  let idx = keyCode - 49
-  { model
-    with
-      ystage=
-        match model.ystage with
-        | InGame(st) ->
-          InGame(
-            { st
-              with
-                dice=
-                  st.dice
-                  |> Array.updateAt idx (
-                    { st.dice[idx] with value= (st.dice[idx].value % 6) + 1}
-                  )
-            }
-          )
-        | _ -> model.ystage
-  }
-
 let update (msg: Msg) (model: Model) : Model =
   match msg with
   | SingleKeyPress(ke) ->
-    match (ke.keyCode, model.developerModeEnabled) with
-    | (192., _) ->
-      { model with developerModeEnabled= not model.developerModeEnabled }
-
-    | (49., true) -> cycleDie 49 model
-    | (50., true) -> cycleDie 50 model
-    | (51., true) -> cycleDie 51 model
-    | (52., true) -> cycleDie 52 model
-    | (53., true) -> cycleDie 53 model
-
-    | _ -> model
+    model.keyMap[int(ke.keyCode)] model
 
   | _ ->
     match model.ystage with
