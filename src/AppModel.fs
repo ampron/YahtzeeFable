@@ -4,10 +4,6 @@ open GameModel
 
 // MODEL
 //------------------------------------------------------------------------------
-type Mode =
-  | NormalMode
-  | DeveloperMode
-
 type YahtzeeStage =
   | Loby
   | InGame of GameState
