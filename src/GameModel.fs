@@ -96,7 +96,6 @@ type GameState =
 
     upperRowLabels: list<string>
     upperTbl: Table<ScoreCardCell>
-    upperBonuses: array<int>
 
     lowerRowLabels: list<string>
     lowerTbl: Table<ScoreCardCell>
@@ -241,7 +240,6 @@ let newGameState (numPlayers: int) =
   {
     rnd= Random()
     // upperColumns= List.init numPlayers (fun _ -> newPlayerUpperColumn())
-    upperBonuses= Array.init numPlayers (fun _ -> 0)
     // lowerColumns= List.init numPlayers (fun _ -> newPlayerLowerColumn())
     numYahtzeeBonuses= Array.init numPlayers (fun _ -> 0)
     activePlayer= 0
