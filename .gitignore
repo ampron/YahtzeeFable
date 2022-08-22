@@ -294,3 +294,5 @@ __pycache__/
 *.xsd.cs
 
 .ionide
+
+!bundle.js
