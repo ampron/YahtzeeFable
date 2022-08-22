@@ -3,6 +3,8 @@ module GameModel
 open System
 open Yahtzee.Data
 
+open YahtzeeFable.Collections
+
 module Seq =
   let flatten (seqs: seq<seq<'a>>): seq<'a> =
     seq{
@@ -99,7 +101,7 @@ type GameState =
 
     lowerRowLabels: list<string>
     lowerTbl: Table<ScoreCardCell>
-    numYahtzeeBonuses: array<int>
+    numYahtzeeBonuses: ImArray<int>
   }
 
   member this.upperRows(): seq<seq<ScoringSlot>> =
@@ -241,7 +243,7 @@ let newGameState (numPlayers: int) =
     rnd= Random()
     // upperColumns= List.init numPlayers (fun _ -> newPlayerUpperColumn())
     // lowerColumns= List.init numPlayers (fun _ -> newPlayerLowerColumn())
-    numYahtzeeBonuses= Array.init numPlayers (fun _ -> 0)
+    numYahtzeeBonuses= ImArray.init numPlayers (fun _ -> 0)
     activePlayer= 0
     rolls= 0
     dice= Array.empty

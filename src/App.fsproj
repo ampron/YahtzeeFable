@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ImArray.fs"/>
     <Compile Include="Table.fs"/>
     <Compile Include="GameModel.fs"/>
     <Compile Include="AppModel.fs"/>

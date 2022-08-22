@@ -3,6 +3,7 @@ module App
 open Elmish
 open Elmish.React
 
+open YahtzeeFable.Collections
 open AppModel
 open GameModel
 open View
@@ -63,9 +64,16 @@ let update (msg: Msg) (model: Model) : Model =
         { model with ystage= InGame({ st with dice= newDice }) }
 
       | ChooseScoringOption(updateScoreCard) ->
-        if GameState.isYahtzeeBonusAvailable st then
-          st.numYahtzeeBonuses.[st.activePlayer] <- st.numYahtzeeBonuses.[st.activePlayer] + 1
-        let newSt = st |> updateScoreCard |> GameState.passTurn
+        let inc =
+          if GameState.isYahtzeeBonusAvailable st then (fun x -> x + 1)
+          else (fun x -> x)
+        let newSt =
+          { st
+            with
+              numYahtzeeBonuses=
+                st.numYahtzeeBonuses |> ImArray.mapAt st.activePlayer inc
+          }
+          |> updateScoreCard |> GameState.passTurn
         match findWinner newSt with
         | None -> { model with ystage= InGame(newSt) }
         | Some((playerIdx, score)) ->

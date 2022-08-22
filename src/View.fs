@@ -3,6 +3,7 @@ module View
 open Fable.React
 open Fable.React.Props
 
+open YahtzeeFable.Collections
 open Yahtzee.Data
 open AppModel
 open GameModel
@@ -100,7 +101,7 @@ let inGameView (model: Model) (st: GameState) dispatch =
           spacerRow()
           tr [] [
             rowLabelCell "Yahtzee Bonuses"
-            for (playerIdx, n) in Seq.indexed st.numYahtzeeBonuses do
+            for (playerIdx, n) in st.numYahtzeeBonuses |> ImArray.toSeq |> Seq.indexed do
               td [] [
                 if playerIdx = st.activePlayer && GameState.isYahtzeeBonusAvailable st then
                   str ($"%d{n + 1}! x 100")
